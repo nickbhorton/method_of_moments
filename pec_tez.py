@@ -14,52 +14,51 @@ wavelength = phase_velocity / frequency
 radius = wavelength / 2
 k0 = 2.0 * np.pi * frequency / phase_velocity
 z0 = np.sqrt(mu_0 / epsilon_0)
-e0 = 1.0
-e_incident = lambda x: e0 * np.exp(-1j * k0 * x)
+h0 = 1.0 / z0
+h_incident = lambda x: h0 * np.exp(-1j * k0 * x)
 
-number_of_source_points = 100
+number_of_source_points = 300
 angles = np.linspace(0, 2.0 * np.pi, number_of_source_points, False)
-x_prime = radius * np.cos(angles)
-y_prime = radius * np.sin(angles)
-source_points = np.stack([x_prime, y_prime], axis=-1)
-nx_prime = np.cos(angles)
-ny_prime = np.sin(angles)
-source_normals = np.stack([nx_prime, ny_prime], axis=-1)
-sn = np.sqrt((x_prime[1] - x_prime[0]) ** 2 + (y_prime[1] - y_prime[0]) ** 2)
+rp = np.stack([radius * np.cos(angles), radius * np.sin(angles)], axis=-1)
+unp = np.stack([np.cos(angles), np.sin(angles)], axis=-1)
 
-front_coeff = k0 * sn / 4j
-point_diff = source_points[:, None, :] - source_points[None, :, :]
-point_diff_norm = np.linalg.norm(point_diff, axis=-1)
-hankel_arg = k0 * point_diff_norm
+integral_segment_length = radius * (angles[1] - angles[0])
 
-np.fill_diagonal(point_diff_norm, 1.0)  # avoid warning
+rp_rp_difference = rp[:, None, :] - rp[None, :, :]
+rp_rp_difference_magnitude = np.linalg.norm(rp_rp_difference, axis=-1)
+
 mom_matrix = (
-    front_coeff
-    * hankel2(1, k0 * point_diff_norm)
-    * (np.sum(source_normals[None, :, :] * point_diff, axis=-1))
-    / (point_diff_norm)
+    (k0 * integral_segment_length / 4j)
+    * hankel2(1, k0 * rp_rp_difference_magnitude)
+    * (1 / rp_rp_difference_magnitude)
+    * np.sum(unp[None, :, :] * rp_rp_difference, axis=-1)
 )
 
-diagonal_element = -1 / 2
+diagonal_element = -0.5
 np.fill_diagonal(mom_matrix, diagonal_element)
 
-b = -1 / z0 * e_incident(x_prime)
-
+b = h_incident(radius * np.cos(angles))
 induced_current = np.linalg.solve(mom_matrix, b)
 
+# calculate fields at observation points
 number_of_observation_points = 500
 observation_radius = 4.0 * wavelength
 x = np.linspace(-observation_radius, observation_radius, number_of_observation_points)
-y = np.linspace(-observation_radius, observation_radius, number_of_observation_points)
-xs, ys = np.meshgrid(x, y)
-observation_points = np.column_stack([xs.ravel(), ys.ravel()])
-r = cdist(observation_points, source_points)
-greens_function = 1 / 4j * hankel2(0, k0 * r)
-integral = greens_function @ (induced_current * sn)
-h_total = 1 / z0 * e_incident(xs) - integral.reshape(xs.shape)
+x, y = np.meshgrid(x, x)
+r = np.column_stack([x.ravel(), y.ravel()])
+r_rp_difference = r[:, None, :] - rp[None, :, :]
+r_rp_difference_magnitude = np.linalg.norm(r_rp_difference, axis=-1)
+greens_function = (
+    (k0 / 4j)
+    * hankel2(1, k0 * r_rp_difference_magnitude)
+    * (1 / r_rp_difference_magnitude)
+    * np.sum(unp[None, :, :] * r_rp_difference, axis=-1)
+)
+integral = greens_function @ (induced_current * integral_segment_length)
+h_total = h_incident(x) - integral.reshape(x.shape)
+h_scattered = h_total - h_incident(x)
 
-h_scattered = h_total - 1 / z0 * e_incident(xs)
-
+# plot
 fig, ax = plt.subplots(1, 2, figsize=(12, 5))
 ax[0].plot(np.rad2deg(angles), np.abs(induced_current), color="black")
 ax[0].scatter(np.rad2deg(angles), np.abs(induced_current), 5, color="black")
