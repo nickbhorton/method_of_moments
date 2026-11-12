@@ -14,8 +14,7 @@ wavelength = phase_velocity / frequency
 radius = wavelength / 2
 k0 = 2.0 * np.pi * frequency / phase_velocity
 z0 = np.sqrt(mu_0 / epsilon_0)
-e0 = 1.0
-e_incident = lambda x: e0 * np.exp(-1j * k0 * x)
+incident = lambda x: np.exp(-1j * k0 * x)
 
 number_of_source_points = 50
 angles = np.linspace(0, 2.0 * np.pi, number_of_source_points, False)
@@ -36,7 +35,7 @@ diagonal_element = coefficient * (
 )
 np.fill_diagonal(mom_matrix, diagonal_element)
 
-b = e_incident(radius * np.cos(angles))
+b = incident(radius * np.cos(angles))
 induced_current = np.linalg.solve(mom_matrix, b)
 
 # calculate fields at observation points
@@ -49,8 +48,8 @@ r = np.column_stack([x.ravel(), y.ravel()])
 r_rp_difference_magnitude = np.linalg.norm(r[:, None, :] - rp[None, :, :], axis=-1)
 greens_function = 1 / 4j * hankel2(0, k0 * r_rp_difference_magnitude)
 integral = greens_function @ (induced_current * integral_segment_length)
-e_total = e_incident(x) - 1j * k0 * z0 * integral.reshape(x.shape)
-e_scattered = e_total - e_incident(x)
+e_total = incident(x) - 1j * k0 * z0 * integral.reshape(x.shape)
+e_scattered = e_total - incident(x)
 
 # plot
 fig, ax = plt.subplots(1, 2, figsize=(12, 5))
